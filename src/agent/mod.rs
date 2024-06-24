@@ -1,41 +1,51 @@
-use std::collections::HashMap;
-use tokio::{
-    io::AsyncWriteExt,
-    time::{sleep, Duration},
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{Read, Seek, Write},
 };
 use uuid::Uuid;
 
-use crate::{BatchMetadata, TopicPartition};
+use crate::{get_metadata_store, metadata::BatchRead, BatchMetadata, TopicPartition};
+
+pub type OffsetRange = (usize, usize);
 
 #[derive(Default)]
-pub struct AgentWriteRequest {
-    topic: String,
-    partition: String,
-    value: Vec<u8>,
+pub struct WriteRequest {
+    pub topic: String,
+    pub partition: String,
+    pub value: Vec<u8>,
+}
+
+#[derive(Default)]
+pub struct ReadRequest {
+    pub topic: String,
+    pub partition: String,
+    pub offsets: OffsetRange,
+}
+
+#[derive(Default)]
+pub struct ReadResult {
+    pub offsets: OffsetRange,
+    pub values: Vec<Vec<u8>>,
 }
 
 #[derive(Default)]
 pub struct Agent {
-    // Topic -> Partition -> Vec<values>
     active_records: TopicPartition<Vec<u8>>,
-    // Topic -> Partition -> Record sizes (in bytes)
     active_metadata: TopicPartition<Vec<usize>>,
+    id: usize,
 }
 
 impl Agent {
-    pub fn new() -> Self {
+    pub fn new(num: usize) -> Self {
         Self {
+            id: num,
             ..Default::default()
         }
     }
 
-    #[tokio::main]
-    pub async fn flush(&mut self) {
-        sleep(Duration::from_millis(250)).await;
-
-        // Topic -> Partition -> (Batch offset in the file, sizes of records)
+    pub fn flush(&mut self) {
         let mut metadata: TopicPartition<BatchMetadata> = HashMap::new();
-
         let mut file_bytes: Vec<u8> = Vec::new();
         let mut batch_offset = 0;
 
@@ -62,27 +72,40 @@ impl Agent {
             }
         }
 
-        // Write to file
-        tokio::spawn(async move {
-            let mut file = match tokio::fs::File::create(file_name).await {
-                Ok(file) => file,
-                Err(e) => {
-                    eprintln!("Error creating file: {}", e);
-                    return;
-                }
-            };
+        self.flush_and_send_metadata(file_name, file_bytes, metadata, self.id);
 
-            if let Err(e) = file.write_all(&file_bytes).await {
-                eprintln!("Error writing to file: {}", e);
-                return;
-            }
-        });
-
-        self.flush();
+        self.active_records.clear();
+        self.active_metadata.clear();
     }
 
-    pub fn write(&mut self, request: AgentWriteRequest) {
-        let AgentWriteRequest {
+    fn flush_and_send_metadata(
+        &self,
+        file_name: String,
+        file_bytes: Vec<u8>,
+        metadata: TopicPartition<BatchMetadata>,
+        id: usize,
+    ) {
+        let full_file_path = format!("s3/{}", file_name);
+        let mut file = match File::create(&full_file_path) {
+            Ok(file) => file,
+            Err(e) => {
+                eprintln!("Error creating file: {}", e);
+                return;
+            }
+        };
+
+        if let Err(e) = file.write_all(&file_bytes) {
+            eprintln!("Error writing to file: {}", e);
+            return;
+        }
+
+        let metadata_store = get_metadata_store();
+        let mut lock = metadata_store.lock().unwrap();
+        lock.write(metadata, id);
+    }
+
+    pub fn write(&mut self, request: WriteRequest) {
+        let WriteRequest {
             topic,
             partition,
             value,
@@ -108,5 +131,43 @@ impl Agent {
         } else {
             topic_metadata.insert(partition.clone(), vec![value.len()]);
         }
+    }
+
+    pub fn read(&self, request: ReadRequest) -> Result<ReadResult, ()> {
+        let id = self.id;
+
+        let metadata_store = get_metadata_store();
+        let lock = metadata_store.lock().unwrap();
+        let reads = lock.read(request, id)?;
+
+        println!("{:?}", reads);
+
+        let results = reads
+            .1
+            .iter()
+            .map(|read| {
+                let BatchRead {
+                    file_name,
+                    file_offset,
+                    length,
+                } = read;
+
+                let file_path = format!("s3/{}", file_name);
+
+                let mut file = File::open(&file_path).unwrap();
+                file.seek(std::io::SeekFrom::Start(*file_offset as u64))
+                    .unwrap();
+
+                let mut buffer = vec![0; *length as usize];
+                file.read_exact(&mut buffer).unwrap();
+
+                buffer
+            })
+            .collect();
+
+        Ok(ReadResult {
+            offsets: reads.0,
+            values: results,
+        })
     }
 }
