@@ -1,26 +1,19 @@
 use std::time::Duration;
-use std::{collections::HashMap, fs, sync::Arc};
+use std::{fs, sync::Arc};
 
-use agent::{Agent, ReadRequest, WriteRequest};
+use agent::Agent;
 use lazy_static::lazy_static;
 use metadata::MetadataStore;
 use std::sync::Mutex;
+use types::{ReadRequest, WriteRequest};
 
 mod agent;
 mod metadata;
-
-type TopicPartition<T> = HashMap<String, HashMap<String, T>>;
+mod types;
 
 lazy_static! {
     static ref METADATA_STORE: Arc<Mutex<MetadataStore>> =
         Arc::new(Mutex::new(MetadataStore::new()));
-}
-
-#[derive(Debug)]
-pub struct BatchMetadata {
-    file_name: String,
-    batch_offset: usize,
-    record_sizes: Vec<usize>,
 }
 
 fn main() {
@@ -61,10 +54,7 @@ fn main() {
             offsets: (1, 2),
         };
         let result = agent.read(request).unwrap();
-        println!(
-            "Read result: {:?}",
-            String::from_utf8(result.values[1].clone())
-        );
+        assert!(String::from_utf8(result.values[1].clone()).unwrap() == "follow");
 
         let request = ReadRequest {
             topic: "2".to_owned(),
@@ -72,10 +62,7 @@ fn main() {
             offsets: (1, 2),
         };
         let result = agent.read(request).unwrap();
-        println!(
-            "Read result: {:?}",
-            String::from_utf8(result.values[0].clone())
-        );
+        assert!(String::from_utf8(result.values[0].clone()).unwrap() == "test2");
     });
 
     loop {

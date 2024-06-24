@@ -1,17 +1,8 @@
-use crate::agent::OffsetRange;
-use crate::{agent::ReadRequest, BatchMetadata, TopicPartition};
+use crate::types::{
+    BatchMetadata, BatchRead, BatchReads, ReadRequest, RecordOffsetAndMetadata, TopicPartition,
+};
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound::Included;
-
-pub type RecordOffsetAndMetadata = BTreeMap<usize, BatchMetadata>;
-pub type BatchReads = (OffsetRange, Vec<BatchRead>);
-
-#[derive(Debug)]
-pub struct BatchRead {
-    pub file_name: String,
-    pub file_offset: usize,
-    pub length: usize,
-}
 
 pub struct MetadataStore {
     metadata: TopicPartition<RecordOffsetAndMetadata>,
@@ -24,8 +15,7 @@ impl MetadataStore {
         }
     }
 
-    pub fn write(&mut self, received_metadata: TopicPartition<BatchMetadata>, agent_id: usize) {
-        println!("Receiving write request from agent {}", agent_id);
+    pub fn write(&mut self, received_metadata: TopicPartition<BatchMetadata>, _agent_id: usize) {
         for (topic, partitions) in received_metadata {
             for (partition, batch_metadata) in partitions {
                 let partition_metadata = self
@@ -48,7 +38,7 @@ impl MetadataStore {
         }
     }
 
-    pub fn read(&self, request: ReadRequest, agent_id: usize) -> Result<BatchReads, ()> {
+    pub fn read(&self, request: ReadRequest, _agent_id: usize) -> Result<BatchReads, ()> {
         let ReadRequest {
             topic,
             partition,
@@ -82,7 +72,7 @@ impl MetadataStore {
                         batch_metadata.record_sizes.iter().sum()
                     };
 
-                    let file_offset = batch_metadata.batch_offset;
+                    let file_offset = batch_metadata.file_offset;
 
                     BatchRead {
                         file_name: batch_metadata.file_name.clone(),
