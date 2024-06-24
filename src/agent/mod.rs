@@ -140,8 +140,6 @@ impl Agent {
         let lock = metadata_store.lock().unwrap();
         let reads = lock.read(request, id)?;
 
-        println!("{:?}", reads);
-
         let results = reads
             .1
             .iter()

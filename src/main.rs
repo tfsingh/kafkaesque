@@ -42,13 +42,18 @@ fn main() {
                 partition: "2".to_owned(),
                 value: String::from("test2").into_bytes(),
             });
+            agent.write(WriteRequest {
+                topic: "1".to_owned(),
+                partition: "1".to_owned(),
+                value: String::from("follow").into_bytes(),
+            });
             agent.flush();
         });
     }
 
+    let agent = Arc::clone(&shared_agent);
     std::thread::spawn(move || {
-        let agent = Arc::clone(&shared_agent);
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(2000));
         let agent = agent.lock().unwrap();
         let request = ReadRequest {
             topic: "1".to_owned(),
@@ -58,7 +63,7 @@ fn main() {
         let result = agent.read(request).unwrap();
         println!(
             "Read result: {:?}",
-            String::from_utf8(result.values[0].clone())
+            String::from_utf8(result.values[1].clone())
         );
 
         let request = ReadRequest {
