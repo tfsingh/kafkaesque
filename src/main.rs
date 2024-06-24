@@ -36,11 +36,7 @@ fn main() {
                 partition: "1".to_owned(),
                 value: String::from("test").into_bytes(),
             });
-        });
-
-        let agent = Arc::clone(&shared_agent);
-        std::thread::spawn(move || {
-            let mut agent = agent.lock().unwrap();
+            agent.flush();
             agent.write(WriteRequest {
                 topic: "2".to_owned(),
                 partition: "2".to_owned(),
