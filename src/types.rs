@@ -33,11 +33,12 @@ pub type OffsetRange = (usize, usize);
 // Returned by the metadata store to indicate a reads for an offset range
 pub type BatchReads = (OffsetRange, Vec<BatchRead>);
 
-// File name, byte offset, and length (in bytes) to read
+// File name, byte offset, and sizes of records to read
 #[derive(Debug)]
 pub struct BatchRead {
     pub file_name: String,
     pub file_offset: usize,
+    // pub record_sizes: Vec<usize>,
     pub length: usize,
 }
 

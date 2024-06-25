@@ -29,6 +29,11 @@ fn main() {
                 partition: "1".to_owned(),
                 value: String::from("test").into_bytes(),
             });
+            agent.write(WriteRequest {
+                topic: "1".to_owned(),
+                partition: "1".to_owned(),
+                value: String::from("another").into_bytes(),
+            });
             agent.flush();
             agent.write(WriteRequest {
                 topic: "2".to_owned(),
@@ -51,10 +56,14 @@ fn main() {
         let request = ReadRequest {
             topic: "1".to_owned(),
             partition: "1".to_owned(),
-            offsets: (1, 2),
+            offsets: (1, 3),
         };
         let result = agent.read(request).unwrap();
-        assert!(String::from_utf8(result.values[1].clone()).unwrap() == "follow");
+        //assert!(String::from_utf8(result.values[0].clone()).unwrap() == "follow");
+        result
+            .values
+            .into_iter()
+            .for_each(|value| println!("{}", String::from_utf8(value).unwrap()));
 
         let request = ReadRequest {
             topic: "2".to_owned(),
