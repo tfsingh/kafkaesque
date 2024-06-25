@@ -65,7 +65,7 @@ impl Agent {
         let lock = metadata_store.lock().unwrap();
         let reads = lock.read(request, id)?;
 
-        let mut records = vec![];
+        let mut records = Vec::new();
         reads.1.iter().for_each(|read| {
             let BatchRead {
                 file_name,

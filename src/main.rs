@@ -25,12 +25,12 @@ fn main() {
         partition: "1".to_owned(),
         value: String::from("test").into_bytes(),
     });
-    agent.flush();
     agent.write(WriteRequest {
         topic: "1".to_owned(),
         partition: "1".to_owned(),
         value: String::from("another").into_bytes(),
     });
+    agent.flush();
 
     agent.write(WriteRequest {
         topic: "2".to_owned(),
@@ -47,7 +47,7 @@ fn main() {
     let request = ReadRequest {
         topic: "1".to_owned(),
         partition: "1".to_owned(),
-        offsets: (1, 3),
+        offsets: (3, 3),
     };
     let result = agent.read(request).unwrap();
 
@@ -60,7 +60,7 @@ fn main() {
     let request = ReadRequest {
         topic: "2".to_owned(),
         partition: "2".to_owned(),
-        offsets: (1, 2),
+        offsets: (1, 1),
     };
     let result = agent.read(request).unwrap();
     println!("{}", String::from_utf8(result.values[0].clone()).unwrap());

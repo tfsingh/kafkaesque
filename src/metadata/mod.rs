@@ -45,6 +45,7 @@ impl MetadataStore {
             partition,
             offsets,
         } = request;
+
         if let Some(offsets_to_metadata) = self
             .metadata
             .get(&topic)
@@ -62,18 +63,21 @@ impl MetadataStore {
                 .range((Included(start_key), Included(end_key)))
                 .map(|(&key, _)| key)
                 .collect();
+
             let reads = offset_keys
                 .iter()
                 .enumerate()
                 .map(|(i, offset)| {
                     let batch_metadata = &offsets_to_metadata[offset];
                     let mut file_offset = batch_metadata.file_offset;
+
                     let record_sizes = if i == 0 {
-                        file_offset = batch_metadata
+                        file_offset += batch_metadata
                             .record_sizes
                             .iter()
                             .take(start - offset)
-                            .sum();
+                            .sum::<usize>();
+
                         batch_metadata
                             .record_sizes
                             .clone()
