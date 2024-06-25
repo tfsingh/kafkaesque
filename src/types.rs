@@ -38,8 +38,7 @@ pub type BatchReads = (OffsetRange, Vec<BatchRead>);
 pub struct BatchRead {
     pub file_name: String,
     pub file_offset: usize,
-    // pub record_sizes: Vec<usize>,
-    pub length: usize,
+    pub record_sizes: Vec<usize>,
 }
 
 // Consumer -> agent

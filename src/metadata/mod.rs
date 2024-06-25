@@ -45,69 +45,59 @@ impl MetadataStore {
             partition,
             offsets,
         } = request;
-
         if let Some(offsets_to_metadata) = self
             .metadata
             .get(&topic)
             .and_then(|partitions| partitions.get(&partition))
         {
             let (start, end) = offsets;
-
-            let nearest_smaller_or_equal_key = |offset| {
+            let leftmost_key = |offset| {
                 offsets_to_metadata
                     .range((Unbounded, Included(offset)))
                     .next_back()
                     .map_or(offset, |(&key, _)| key)
             };
-
-            let (start_key, end_key) = (
-                nearest_smaller_or_equal_key(start),
-                nearest_smaller_or_equal_key(end),
-            );
-
+            let (start_key, end_key) = (leftmost_key(start), leftmost_key(end));
             let offset_keys: Vec<usize> = offsets_to_metadata
                 .range((Included(start_key), Included(end_key)))
                 .map(|(&key, _)| key)
                 .collect();
-
             let reads = offset_keys
                 .iter()
                 .enumerate()
                 .map(|(i, offset)| {
                     let batch_metadata = &offsets_to_metadata[offset];
                     let mut file_offset = batch_metadata.file_offset;
-
-                    let length = if i == 0 {
+                    let record_sizes = if i == 0 {
                         file_offset = batch_metadata
                             .record_sizes
                             .iter()
                             .take(start - offset)
                             .sum();
-
                         batch_metadata
                             .record_sizes
-                            .iter()
+                            .clone()
+                            .into_iter()
                             .skip(start - offset)
                             .take(end - start + 1)
-                            .sum()
+                            .collect::<Vec<usize>>()
                     } else if i == offset_keys.len() - 1 {
                         batch_metadata
                             .record_sizes
-                            .iter()
+                            .clone()
+                            .into_iter()
                             .take(end - offset + 1)
-                            .sum()
+                            .collect::<Vec<usize>>()
                     } else {
-                        batch_metadata.record_sizes.iter().sum()
+                        batch_metadata.record_sizes.clone()
                     };
-
                     BatchRead {
                         file_name: batch_metadata.file_name.clone(),
                         file_offset,
-                        length,
+                        record_sizes,
                     }
                 })
                 .collect::<Vec<BatchRead>>();
-
             Ok((offsets, reads))
         } else {
             Err(())

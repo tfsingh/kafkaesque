@@ -57,36 +57,44 @@ impl Agent {
     pub fn read(&self, request: ReadRequest) -> Result<ReadResult, ()> {
         let id = self.id;
 
+        if request.offsets.1 < request.offsets.0 {
+            return Err(());
+        }
+
         let metadata_store = get_metadata_store();
         let lock = metadata_store.lock().unwrap();
         let reads = lock.read(request, id)?;
 
-        let results = reads
-            .1
-            .iter()
-            .map(|read| {
-                let BatchRead {
-                    file_name,
-                    file_offset,
-                    length,
-                } = read;
+        let mut records = vec![];
+        reads.1.iter().for_each(|read| {
+            let BatchRead {
+                file_name,
+                file_offset,
+                record_sizes,
+            } = read;
 
-                let file_path = format!("s3/{}", file_name);
+            let length: usize = record_sizes.iter().sum();
 
-                let mut file = File::open(&file_path).unwrap();
-                file.seek(std::io::SeekFrom::Start(*file_offset as u64))
-                    .unwrap();
+            let file_path = format!("s3/{}", file_name);
 
-                let mut buffer = vec![0; *length];
-                file.read_exact(&mut buffer).unwrap();
+            let mut file = File::open(&file_path).unwrap();
+            file.seek(std::io::SeekFrom::Start(*file_offset as u64))
+                .unwrap();
 
-                buffer
-            })
-            .collect();
+            let mut buffer = vec![0; length];
+            file.read_exact(&mut buffer).unwrap();
+
+            let mut record_offset = 0;
+            for record_size in record_sizes {
+                let record = buffer[record_offset..(record_offset + record_size)].to_vec();
+                records.push(record);
+                record_offset += record_size
+            }
+        });
 
         Ok(ReadResult {
             offsets: reads.0,
-            values: results,
+            values: records,
         })
     }
 
